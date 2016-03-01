@@ -3,10 +3,12 @@
 ## Create the project and UI
 
 1. Create a new **ASP.NET Web Application**. Name it `OAuthStarter` and click **OK**.
-![Screenshot](./images/create-project-1.PNG)
+
+  ![Screenshot](./images/create-project-1.PNG)
 
 1. Click the **Change Authentication** button and change the authentication to **No Authentication**, and click **OK**. Click **OK** again to create the project.
-![Screenshot](./images/create-project-2.PNG)
+
+  ![Screenshot](./images/create-project-2.PNG)
 
 1. Open the `./Views/Home/Index.cshtml` file and replace the entire contents with the following code:
 
@@ -100,7 +102,8 @@
   ```
   
 1. In Solution Explorer, right-click the `OAuthStarter` project and choose **Properties**. Select **Web** in the left-hand list. Locate the **Project Url** field, and make note of the port number included in the URL.  You'll need this value soon. For example, in this screenshot, the port number is **53674**.
-![Screenshot](/images/project-properties-port.PNG)
+
+  ![Screenshot](./images/project-properties-port.PNG)
 
 1. Open your browser and go to https://apps.dev.microsoft.com. Sign in with either your Microsoft account (an Outlook.com, Hotmail.com, Live.com, etc. address) or an Office 365 account.
 
@@ -471,16 +474,20 @@
 At this point if you run the app, you can log in and see the authorization code and ID token.
 
 The app starts:
-![Screenshot](/images/app-login-page.PNG)
+
+![Screenshot](./images/app-login-page.PNG)
 
 Clicking the **Click here to login** button takes the user here:
-![Screenshot](/images/app-azure-login.PNG)
+
+![Screenshot](./images/app-azure-login.PNG)
 
 Once logged in, the user is prompted for consent to the requested scopes:
-![Screenshot](/images/app-consent.PNG)
+
+![Screenshot](./images/app-consent.PNG)
 
 If the user grants access, the browser is redirected back to the app:
-![Screenshot](/images/app-logged-in.PNG)
+
+![Screenshot](./images/app-logged-in.PNG)
 
 ### Exchange the authorization code for an access token
 
@@ -652,7 +659,147 @@ If the user grants access, the browser is redirected back to the app:
   ```
   
 1. Save all changes and run the app. Login as before. Now you should see an access and refresh token in the debug output.
-![Screenshot](/images/app-access-token.PNG)
+
+  ![Screenshot](./images/app-access-token.PNG)
 
 ## Call the Graph API (Optional)
 
+In this section we'll add a page to the app to make basic Graph API calls using the access token we've obtained.
+
+1. Open the `./Content/Site.css` file and remove the following lines:
+
+  ```css
+  /* Set width on the form input elements since they're 100% wide by default */
+  input,
+  select,
+  textarea {
+      max-width: 280px;
+  }
+  ```
+
+1. Open the `./Views/Shared/_Layout.cshtml` file. Add the following code immediately before the `<li>@Html.ActionLink("Logout", "Logout", "OAuth")</li>` line:
+
+  ```C#
+  <li>@Html.ActionLink("Graph", "Graph", "Home")</li>
+  ```
+  
+1. Expand the `Views` folder in Solution Explorer, then right-click the `Home` folder and choose **Add**, then **MVC 5 View Page (Razor)**. Name the page `Graph` and click **OK**. Replace the entire contents of the file with the following code:
+
+  ```C#
+  @{
+    ViewBag.Title = "Graph Tester";
+  }
+
+  <h1>Graph Tester</h1>
+
+  <input type="hidden" id="access-token" value="@ViewBag.AccessToken" />
+  <div class="row">
+      <div class="col-sm-12">
+          <div class="input-group">
+              <input type="text" class="form-control" id="request-url" value="https://graph.microsoft.com/v1.0/me" />
+              <span class="input-group-btn">
+                  <button class="btn btn-default" type="button" id="submit-request">Go!</button>
+              </span>
+          </div>
+      </div>
+  </div>
+  <div class="row">
+      <div class="col-sm-12">
+          <label for="response-body">Response</label>
+          <div id="response-body">
+              <pre></pre>
+          </div>
+      </div>
+  </div>
+
+  @section scripts {
+      <script>
+          $(function () {
+
+              $('#submit-request').click(function (event) {
+                  var token = $('#access-token').val();
+                  var url = $('#request-url').val();
+                  $.ajax({
+                      url: './SendGraphRequest',
+                      dataType: 'json',
+                      type: 'POST',
+                      data: {
+                          'accessToken': token,
+                          'requestUrl': url
+                      }
+                  })
+                  .done(function (data) {
+                      var response = JSON.parse(data);
+                      $('#response-body').find("pre").text(JSON.stringify(response, null, 2));
+                  });
+              });
+          });
+      </script>
+  }
+  ```
+
+1. Open the `./Controllers/HomeController.cs` file and add the following `using` directives to the top of the file:
+
+  ```C#
+  using System.Net.Http;
+  using System.Net.Http.Headers;
+  using System.Threading.Tasks;
+  ```
+  
+1. Add the following methods to the `HomeController` class:
+
+  ```C#
+  public async Task<ActionResult> Graph()
+  {
+    // Add user info to view if present
+    string userName = (string)Session["user_name"];
+    string userEmail = (string)Session["user_email"];
+
+    ViewBag.UserLoggedIn = !string.IsNullOrEmpty(userName) && !string.IsNullOrEmpty(userEmail);
+    if (!ViewBag.UserLoggedIn)
+    {
+      TempData["message"] = "Please log in.";
+      return Redirect("/");
+    }
+
+    ViewBag.UserName = userName;
+    ViewBag.UserEmail = userEmail;
+
+    // Get the user's access token
+    string redirectUri = Url.Action("Authorize", "OAuth", null, Request.Url.Scheme);
+    OAuthHelper oauthHelper = new OAuthHelper(authority, appId, appSecret);
+
+    string accessToken = await oauthHelper.GetUserAccessToken(Session, redirectUri);
+    if (string.IsNullOrEmpty(accessToken))
+    {
+      TempData["message"] = "Access token missing. Please log out and log in again.";
+      return Redirect("/");
+    }
+
+    ViewBag.AccessToken = accessToken;
+
+    return View();
+  }
+
+  [HttpPost]
+  public async Task<ActionResult> SendGraphRequest(string accessToken, string requestUrl)
+  {
+    using (HttpClient httpClient = new HttpClient())
+    {
+      // Set up the HTTP GET request
+      HttpRequestMessage apiRequest = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+      apiRequest.Headers.UserAgent.Add(new ProductInfoHeaderValue("OAuthStarter", "1.0"));
+      apiRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+      apiRequest.Headers.Add("client-request-id", Guid.NewGuid().ToString());
+      apiRequest.Headers.Add("return-client-request-id", "true");
+
+      // Send the request and return the JSON body of the response
+      HttpResponseMessage response = await httpClient.SendAsync(apiRequest);
+      return Json(response.Content.ReadAsStringAsync().Result);
+    }
+  }
+  ```
+  
+1. Save all changes and restart the app. Login as before, then click the **Graph** link in the top navigation bar. Click the **Go!** button to send a GET request to `https://graph.microsoft.com/v1.0/me`.
+
+  ![Screenshot](./images/app-graph-call.PNG)

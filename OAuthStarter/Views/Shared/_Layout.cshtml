@@ -27,6 +27,7 @@
                 @if (null != ViewBag.UserLoggedIn && ViewBag.UserLoggedIn)
                 {
                 <ul class="nav navbar-nav navbar-right">
+                    <li>@Html.ActionLink("Graph", "Graph", "Home")</li>
                     <li>@Html.ActionLink("Logout", "Logout", "OAuth")</li>
                 </ul>
                 }

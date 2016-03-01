@@ -2,6 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
 
@@ -84,6 +87,56 @@ namespace OAuthStarter.Controllers
     {
       ViewBag.ErrorMessage = TempData["error_message"];
       return View();
+    }
+
+    public async Task<ActionResult> Graph()
+    {
+      // Add user info to view if present
+      string userName = (string)Session["user_name"];
+      string userEmail = (string)Session["user_email"];
+
+      ViewBag.UserLoggedIn = !string.IsNullOrEmpty(userName) && !string.IsNullOrEmpty(userEmail);
+      if (!ViewBag.UserLoggedIn)
+      {
+        TempData["message"] = "Please log in.";
+        return Redirect("/");
+      }
+
+      ViewBag.UserName = userName;
+      ViewBag.UserEmail = userEmail;
+
+      // Get the user's access token
+      string redirectUri = Url.Action("Authorize", "OAuth", null, Request.Url.Scheme);
+      OAuthHelper oauthHelper = new OAuthHelper(authority, appId, appSecret);
+
+      string accessToken = await oauthHelper.GetUserAccessToken(Session, redirectUri);
+      if (string.IsNullOrEmpty(accessToken))
+      {
+        TempData["message"] = "Access token missing. Please log out and log in again.";
+        return Redirect("/");
+      }
+
+      ViewBag.AccessToken = accessToken;
+
+      return View();
+    }
+
+    [HttpPost]
+    public async Task<ActionResult> SendGraphRequest(string accessToken, string requestUrl)
+    {
+      using (HttpClient httpClient = new HttpClient())
+      {
+        // Set up the HTTP GET request
+        HttpRequestMessage apiRequest = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+        apiRequest.Headers.UserAgent.Add(new ProductInfoHeaderValue("OAuthStarter", "1.0"));
+        apiRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        apiRequest.Headers.Add("client-request-id", Guid.NewGuid().ToString());
+        apiRequest.Headers.Add("return-client-request-id", "true");
+
+        // Send the request and return the JSON body of the response
+        HttpResponseMessage response = await httpClient.SendAsync(apiRequest);
+        return Json(response.Content.ReadAsStringAsync().Result);
+      }
     }
   }
 }
