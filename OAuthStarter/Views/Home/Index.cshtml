@@ -1,0 +1,24 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+    ViewBag.LoginUri = ViewBag.LoginUri ?? "#";
+    ViewBag.UserName = ViewBag.UserName ?? string.Empty;
+    ViewBag.UserEmail = ViewBag.UserEmail ?? string.Empty;
+    ViewBag.UserLoggedIn = ViewBag.UserLoggedIn ?? false;
+}
+
+<div class="jumbotron">
+    <h1>Azure v2 App Model</h1>
+    <p class="lead">This sample uses OAuth 2.0 to authenticate the user using the v2 app model.</p>
+    @if (ViewBag.Message != null)
+    {
+    <p class="alert alert-warning">@ViewBag.Message</p>
+    }
+    @if (ViewBag.UserLoggedIn)
+    {
+    <p>Hello @ViewBag.UserName!</p>
+    }
+    else
+    {
+    <p><a class="btn btn-primary btn-lg" href="@ViewBag.LoginUri.ToString()">Click here to login</a></p>
+    }
+</div>
